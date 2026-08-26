@@ -10,9 +10,10 @@ Condensed version also lives at `docs/architecture.md` in this repo.
 
 ## Status
 
-- [ ] Phase 1 — schema + read-only source access
+- [x] Repo scaffolded, schema migration written, ETL source mapping confirmed
+- [ ] Phase 1 — schema applied to a live Postgres + read-only source access
 - [ ] Phase 2 — ETL v1 (50–100 books)
-- [ ] Phase 3 — FastAPI + self-written BFS
+- [ ] Phase 3 — API + self-written BFS
 - [ ] Phase 4 — Next.js + Cytoscape.js frontend v1
 - [ ] Phase 5 — pathfinding + weights (Dijkstra)
 - [ ] Phase 6 — tests, deploy, docs
@@ -20,10 +21,20 @@ Condensed version also lives at `docs/architecture.md` in this repo.
 ## Layout
 
 ```
-apps/api/      FastAPI service — routers/, graph/ (bfs.py, dijkstra.py, weights.py — hand-written), models/, tests/
+apps/api/      Spring Boot (Java 17) — graph/ (Bfs.java, Dijkstra.java, WeightCalculator.java — hand-written), model/, controller/, repository/
 apps/web/      Next.js + TypeScript + Tailwind + Cytoscape.js frontend
-etl/           extract → transform → load pipeline, read-only against the 1Min1Book source
+etl/           extract → transform → load pipeline (Python), read-only against the 1Min1Book source
 db/migrations/ SQL migrations (nodes, books, edges)
 notebooks/     NetworkX experiments — never imported by apps/api
 docs/          architecture notes
+```
+
+## Running the API locally
+
+```
+cd apps/api
+export SPRING_DATASOURCE_URL=jdbc:postgresql://<host>/<db>?sslmode=require
+export SPRING_DATASOURCE_USERNAME=...
+export SPRING_DATASOURCE_PASSWORD=...
+mvn spring-boot:run
 ```
