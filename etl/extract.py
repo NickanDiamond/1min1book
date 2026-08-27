@@ -34,6 +34,15 @@ class Book:
     curated_lists: list[str] | None = None  # e.g. "Pulitzer Prize Top 50" — bonus signal, ~40% coverage
 
 
+def _clean_title(value) -> str:
+    """A couple of titles ("1984", "1776") are pure digits, so Excel stored
+    them as numbers instead of text. Format those back to plain integers
+    instead of "1984.0"."""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value).strip()
+
+
 def _header_index(header_row) -> dict[str, int]:
     """Map column name -> 1-based column index, so row access doesn't depend
     on column order in the source file."""
@@ -71,7 +80,7 @@ def extract(worksheet_path: Path = DEFAULT_WORKSHEET_PATH, limit: int | None = N
 
     books: list[Book] = []
     for row in summaries.iter_rows(min_row=2):
-        title = row[header[" Title"] - 1].value  # note: source header has a leading space
+        title = row[header["Title"] - 1].value  # note: source header has a leading space
         if not title:
             continue
         author = row[header["Author"] - 1].value
@@ -80,9 +89,10 @@ def extract(worksheet_path: Path = DEFAULT_WORKSHEET_PATH, limit: int | None = N
         key = str(title).strip().lower()
         bonus = top_lists.get(key, {})
 
+        clean_title = _clean_title(title)
         books.append(Book(
-            external_id=str(title).strip(),
-            title=str(title).strip(),
+            external_id=clean_title,
+            title=clean_title,
             author=str(author).strip() if author else "",
             video_script=str(video_script).strip() if video_script else "",
             fiction_nonfiction=bonus.get("fiction_nonfiction"),
