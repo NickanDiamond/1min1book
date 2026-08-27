@@ -17,3 +17,6 @@ credentials.json
 
 # OS
 .DS_Store
+
+# ETL working data — Nick's own raw export + generated intermediate files
+etl/data/
