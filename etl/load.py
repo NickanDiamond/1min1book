@@ -44,7 +44,7 @@ def get_or_create_node(cur, node_type: str, name: str, external_id: str | None =
     if external_id is not None:
         cur.execute(
             "INSERT INTO nodes (type, name, external_id) VALUES (%s, %s, %s) "
-            "ON CONFLICT (external_id) DO UPDATE SET name = EXCLUDED.name "
+            "ON CONFLICT (external_id) WHERE external_id IS NOT NULL DO UPDATE SET name = EXCLUDED.name "
             "RETURNING id",
             (node_type, name, external_id),
         )
