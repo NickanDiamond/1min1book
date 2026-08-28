@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Extract step: read the 1Min1Book worksheet and produce a clean, structured
 list of books to hand to transform.py.
