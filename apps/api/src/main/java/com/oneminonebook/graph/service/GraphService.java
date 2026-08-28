@@ -19,6 +19,8 @@ import java.util.stream.Collectors;
 @Service
 public class GraphService {
 
+    private static final String SIMILAR_TO = "SIMILAR_TO";
+
     private final NodeRepository nodeRepository;
     private final EdgeRepository edgeRepository;
 
@@ -62,15 +64,31 @@ public class GraphService {
     }
 
     /**
-     * Loads the whole graph once per request and runs either plain BFS
-     * (fewest hops) or hand-written Dijkstra (cost = 1 - weight, favoring
-     * strong connections) depending on `weighted`. At this dataset's scale
-     * (a few hundred edges) that's simpler than an incremental in-memory
-     * cache and still fast enough not to matter.
+     * weighted=false: plain BFS over every relationship type -- "how are
+     * these two nodes connected at all," fewest hops, ignoring strength.
+     *
+     * weighted=true: Dijkstra over SIMILAR_TO edges ONLY, cost = 1 - weight.
+     * This is deliberate, not an oversight: WRITTEN_BY/BELONGS_TO_GENRE/
+     * DISCUSSES edges default to weight 1.0 (cost 0), so if Dijkstra were
+     * allowed to use them it would always route through a shared genre or
+     * author for free instead of a weaker-but-more-meaningful SIMILAR_TO
+     * connection -- "same genre" would silently out-rank "shares the theme
+     * of authoritarianism" every time. Restricting the weighted query to
+     * SIMILAR_TO keeps its meaning crisp: "how strongly are these books
+     * related by extracted theme," not "are they trivially in the same
+     * bucket." A consequence is that two books with no SIMILAR_TO chain
+     * between them return no weighted path even if BFS could reach them
+     * through a genre/author node -- that's the graph honestly reporting
+     * "not related by theme," not a bug.
      */
     public Optional<List<PathStepView>> findPath(long fromId, long toId, boolean weighted) {
         List<Edge> allEdges = edgeRepository.findAll();
-        Graph graph = Graph.fromEdges(allEdges);
+        List<Edge> edgesForTraversal = weighted
+                ? allEdges.stream()
+                        .filter(edge -> SIMILAR_TO.equals(edge.relationshipType()))
+                        .collect(Collectors.toList())
+                : allEdges;
+        Graph graph = Graph.fromEdges(edgesForTraversal);
 
         Optional<List<PathStep>> rawPath = weighted
                 ? Dijkstra.shortestPath(graph, fromId, toId)
