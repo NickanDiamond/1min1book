@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type cytoscape from "cytoscape";
-import type { GraphNode, Neighbor, PathStep, RelationshipType } from "./types";
+import type { GraphNode, Neighbor, NodeType, PathStep, RelationshipType } from "./types";
 
 export interface GraphEdge {
   id: string;
@@ -20,6 +20,8 @@ function edgeId(a: number, b: number, relationshipType: string): string {
   return `${lo}-${hi}-${relationshipType}`;
 }
 
+const STEP_DELAY_MS = 450;
+
 /**
  * Client-side accumulation of the graph the user has explored so far --
  * starts empty, grows one search/expand/path-lookup at a time. This is
@@ -29,22 +31,17 @@ function edgeId(a: number, b: number, relationshipType: string): string {
 export function useGraphState() {
   const [nodes, setNodes] = useState<Map<number, GraphNode>>(new Map());
   const [edges, setEdges] = useState<Map<string, GraphEdge>>(new Map());
+
+  // Path-reveal state, used by the Find a Connection screen. pathNodeIds /
+  // pathEdgeIds is the *full* path (used to decide what to dim); revealed*
+  // grows one step at a time to drive the reveal animation.
   const [pathNodeIds, setPathNodeIds] = useState<Set<number>>(new Set());
   const [pathEdgeIds, setPathEdgeIds] = useState<Set<string>>(new Set());
+  const [revealedNodeIds, setRevealedNodeIds] = useState<Set<number>>(new Set());
+  const [revealedEdgeIds, setRevealedEdgeIds] = useState<Set<string>>(new Set());
+  const revealTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const addNode = useCallback((node: GraphNode) => {
-    setNodes((prev) => {
-      if (prev.has(node.id)) return prev;
-      const next = new Map(prev);
-      next.set(node.id, node);
-      return next;
-    });
-  }, []);
-
-  /** The "click a node to expand its neighbors" step: adds the center node
-   * (in case it wasn't already on the canvas) plus every neighbor and the
-   * edge connecting it. */
-  const expandNode = useCallback((center: GraphNode, neighbors: Neighbor[]) => {
+  const mergeNeighbors = useCallback((center: GraphNode, neighbors: Neighbor[]) => {
     setNodes((prev) => {
       const next = new Map(prev);
       next.set(center.id, center);
@@ -74,10 +71,34 @@ export function useGraphState() {
     });
   }, []);
 
-  /** Merges a resolved path into the graph and marks it highlighted. Each
-   * PathStep already carries its own node name/type and the edge used to
-   * reach it from the previous step, so this needs no extra network calls. */
+  /** Single-hop expand: adds the center node plus its direct neighbors. */
+  const expandNode = useCallback(
+    (center: GraphNode, neighbors: Neighbor[]) => mergeNeighbors(center, neighbors),
+    [mergeNeighbors],
+  );
+
+  /** Clears everything -- used when jumping to a brand new root node. */
+  const reset = useCallback(() => {
+    setNodes(new Map());
+    setEdges(new Map());
+    setPathNodeIds(new Set());
+    setPathEdgeIds(new Set());
+    setRevealedNodeIds(new Set());
+    setRevealedEdgeIds(new Set());
+  }, []);
+
+  /**
+   * Merges a resolved path into the graph, then reveals it one hop at a
+   * time (used by the Find a Connection screen). While a path is active,
+   * `dimNonPath` (below) tells the canvas to fade everything that isn't on
+   * the path, and `revealedNodeIds`/`revealedEdgeIds` grow on a timer so
+   * the highlight visibly travels along the path instead of appearing all
+   * at once.
+   */
   const showPath = useCallback((steps: PathStep[]) => {
+    revealTimers.current.forEach(clearTimeout);
+    revealTimers.current = [];
+
     const newNodes = new Map<number, GraphNode>();
     const newEdges = new Map<string, GraphEdge>();
     const nodeIds = new Set<number>();
@@ -112,12 +133,32 @@ export function useGraphState() {
     setEdges((prev) => new Map([...prev, ...newEdges]));
     setPathNodeIds(nodeIds);
     setPathEdgeIds(edgeIds);
+    setRevealedNodeIds(new Set());
+    setRevealedEdgeIds(new Set());
+
+    steps.forEach((step, i) => {
+      const timer = setTimeout(() => {
+        setRevealedNodeIds((prev) => new Set(prev).add(step.nodeId));
+        if (i > 0 && step.relationshipType) {
+          const prevStep = steps[i - 1];
+          const id = edgeId(prevStep.nodeId, step.nodeId, step.relationshipType);
+          setRevealedEdgeIds((prev) => new Set(prev).add(id));
+        }
+      }, i * STEP_DELAY_MS);
+      revealTimers.current.push(timer);
+    });
   }, []);
 
   const clearPath = useCallback(() => {
+    revealTimers.current.forEach(clearTimeout);
+    revealTimers.current = [];
     setPathNodeIds(new Set());
     setPathEdgeIds(new Set());
+    setRevealedNodeIds(new Set());
+    setRevealedEdgeIds(new Set());
   }, []);
+
+  const pathActive = pathNodeIds.size > 0;
 
   const elements = useMemo<cytoscape.ElementDefinition[]>(() => {
     const nodeEls: cytoscape.ElementDefinition[] = Array.from(nodes.values()).map((n) => ({
@@ -125,7 +166,8 @@ export function useGraphState() {
         id: String(n.id),
         label: n.name,
         nodeType: n.type,
-        highlighted: pathNodeIds.has(n.id),
+        inPath: pathActive ? pathNodeIds.has(n.id) : false,
+        highlighted: pathActive ? revealedNodeIds.has(n.id) : false,
       },
     }));
     const edgeEls: cytoscape.ElementDefinition[] = Array.from(edges.values()).map((e) => ({
@@ -135,11 +177,43 @@ export function useGraphState() {
         target: String(e.target),
         relationshipType: e.relationshipType,
         weight: e.weight,
-        highlighted: pathEdgeIds.has(e.id),
+        inPath: pathActive ? pathEdgeIds.has(e.id) : false,
+        highlighted: pathActive ? revealedEdgeIds.has(e.id) : false,
       },
     }));
     return [...nodeEls, ...edgeEls];
-  }, [nodes, edges, pathNodeIds, pathEdgeIds]);
+  }, [nodes, edges, pathActive, pathNodeIds, pathEdgeIds, revealedNodeIds, revealedEdgeIds]);
 
-  return { nodes, edges, elements, addNode, expandNode, showPath, clearPath };
+  /** Elements filtered down to a set of visible node types -- an edge is
+   * hidden if either endpoint is hidden, since Cytoscape errors on an edge
+   * that references a node not present in the element set. */
+  const filterByType = useCallback(
+    (visibleTypes: Set<NodeType>) => {
+      const visibleIds = new Set(
+        Array.from(nodes.values())
+          .filter((n) => visibleTypes.has(n.type))
+          .map((n) => n.id),
+      );
+      return elements.filter((el) => {
+        const data = el.data as { id?: string; source?: string; target?: string };
+        if (data.source !== undefined && data.target !== undefined) {
+          return visibleIds.has(Number(data.source)) && visibleIds.has(Number(data.target));
+        }
+        return visibleIds.has(Number(data.id));
+      });
+    },
+    [nodes, elements],
+  );
+
+  return {
+    nodes,
+    edges,
+    elements,
+    pathActive,
+    expandNode,
+    showPath,
+    clearPath,
+    reset,
+    filterByType,
+  };
 }

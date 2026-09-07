@@ -4,6 +4,13 @@ import { useEffect, useState } from "react";
 import { searchNodes } from "@/lib/api";
 import type { GraphNode } from "@/lib/types";
 
+const TYPE_LABEL: Record<string, string> = {
+  BOOK: "Book",
+  AUTHOR: "Author",
+  GENRE: "Genre",
+  TOPIC: "Topic",
+};
+
 export interface SearchBoxProps {
   placeholder?: string;
   onSelect: (node: GraphNode) => void;
@@ -17,10 +24,15 @@ export default function SearchBox({ placeholder, onSelect }: SearchBoxProps) {
 
   useEffect(() => {
     if (!query.trim()) {
-      setResults([]);
       return;
     }
     let cancelled = false;
+    // Intentional: this Effect fetches search results whenever `query`
+    // changes, and flips a loading flag while that fetch is in flight --
+    // the standard "Effect that syncs with an external system" case React's
+    // docs describe, not the "you might not need an Effect" case this rule
+    // otherwise guards against.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     // Debounce -- avoid firing a search request on every keystroke.
     const timer = setTimeout(() => {
@@ -47,8 +59,8 @@ export default function SearchBox({ placeholder, onSelect }: SearchBoxProps) {
       <input
         type="text"
         value={query}
-        placeholder={placeholder ?? "Search books, authors, genres, topics..."}
-        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500"
+        placeholder={placeholder ?? "Search books, authors, genres, topics…"}
+        className="w-full rounded-lg border border-zinc-200 bg-white px-3.5 py-2.5 text-sm text-zinc-900 shadow-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400"
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);
@@ -57,16 +69,16 @@ export default function SearchBox({ placeholder, onSelect }: SearchBoxProps) {
         onBlur={() => setTimeout(() => setOpen(false), 150)}
       />
       {open && query.trim() !== "" && (
-        <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md border border-gray-200 bg-white shadow-lg">
-          {loading && <div className="px-3 py-2 text-sm text-gray-400">Searching…</div>}
+        <div className="absolute z-20 mt-1.5 max-h-64 w-full overflow-auto rounded-lg border border-zinc-200 bg-white shadow-lg">
+          {loading && <div className="px-3.5 py-2 text-sm text-zinc-400">Searching…</div>}
           {!loading && results.length === 0 && (
-            <div className="px-3 py-2 text-sm text-gray-400">No matches</div>
+            <div className="px-3.5 py-2 text-sm text-zinc-400">No matches</div>
           )}
           {results.map((node) => (
             <button
               key={node.id}
               type="button"
-              className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50"
+              className="flex w-full items-center justify-between px-3.5 py-2 text-left text-sm hover:bg-zinc-50"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 onSelect(node);
@@ -74,8 +86,10 @@ export default function SearchBox({ placeholder, onSelect }: SearchBoxProps) {
                 setOpen(false);
               }}
             >
-              <span className="text-gray-900">{node.name}</span>
-              <span className="ml-2 text-xs uppercase text-gray-400">{node.type}</span>
+              <span className="text-zinc-900">{node.name}</span>
+              <span className="ml-2 text-xs uppercase text-zinc-400">
+                {TYPE_LABEL[node.type] ?? node.type}
+              </span>
             </button>
           ))}
         </div>
