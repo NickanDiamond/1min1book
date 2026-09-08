@@ -75,7 +75,17 @@ function ExploreContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialNodeId]);
 
-  const handleSearchSelect = useCallback((node: GraphNode) => selectAndExpand(node.id), [selectAndExpand]);
+  const handleSearchSelect = useCallback(
+    (node: GraphNode) => {
+      // A fresh search starts a clean canvas -- clicking a node already on
+      // the canvas still accumulates (that's the "explore outward"
+      // feature), but searching for something new shouldn't pile it on
+      // top of whatever's already there.
+      reset();
+      selectAndExpand(node.id);
+    },
+    [reset, selectAndExpand],
+  );
   const handleNodeClick = useCallback((id: number) => selectAndExpand(id), [selectAndExpand]);
 
   const handleToggleType = useCallback((type: NodeType) => {

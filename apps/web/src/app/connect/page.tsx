@@ -8,7 +8,7 @@ import { useGraphState } from "@/lib/useGraphState";
 import type { GraphNode, PathStep } from "@/lib/types";
 
 export default function ConnectPage() {
-  const { elements, pathActive, showPath, clearPath } = useGraphState();
+  const { elements, pathActive, showPath, reset } = useGraphState();
   const [from, setFrom] = useState<GraphNode | null>(null);
   const [to, setTo] = useState<GraphNode | null>(null);
   const [weighted, setWeighted] = useState(true);
@@ -23,7 +23,10 @@ export default function ConnectPage() {
     setLoading(true);
     setNotFound(false);
     setSteps(null);
-    clearPath();
+    // Each new path search starts from a clean canvas -- otherwise nodes
+    // and edges from a previous, unrelated search stick around and
+    // clutter (or literally overlap) the new path's layout.
+    reset();
     try {
       const result = await getPath(from.id, to.id, weighted);
       if (result === null) {
@@ -35,7 +38,7 @@ export default function ConnectPage() {
     } finally {
       setLoading(false);
     }
-  }, [from, to, weighted, clearPath, showPath]);
+  }, [from, to, weighted, reset, showPath]);
 
   return (
     <>

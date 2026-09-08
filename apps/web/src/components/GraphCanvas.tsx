@@ -12,17 +12,25 @@ const BASE_STYLESHEET: (cytoscape.StylesheetStyle | cytoscape.StylesheetCSS)[] =
     selector: "node",
     style: {
       label: "data(label)",
-      color: "#3f3f46",
-      "font-size": 10,
+      color: "#27272a",
+      "font-size": 11,
+      "font-weight": 500,
       "font-family": "var(--font-geist-sans), sans-serif",
       "text-valign": "bottom",
-      "text-margin-y": 6,
-      width: 26,
-      height: 26,
+      "text-margin-y": 8,
+      // A white outline behind the label keeps it legible where an edge
+      // or another node's label crosses behind it, instead of relying on
+      // pure spacing to avoid every collision.
+      "text-outline-width": 3,
+      "text-outline-color": "#fafafa",
+      "text-outline-opacity": 1,
+      width: 30,
+      height: 30,
       "border-width": 2,
       "border-color": "#ffffff",
       "background-color": "#a1a1aa",
       shape: "ellipse",
+      "overlay-opacity": 0,
       "transition-property": "opacity, border-width, width, height",
       "transition-duration": 200,
     },
@@ -32,23 +40,23 @@ const BASE_STYLESHEET: (cytoscape.StylesheetStyle | cytoscape.StylesheetCSS)[] =
   // topics as facets cutting across books (diamond).
   {
     selector: 'node[nodeType = "BOOK"]',
-    style: { shape: "round-rectangle", "background-color": "#3b6fd6", width: 30, height: 24 },
+    style: { shape: "round-rectangle", "background-color": "#3b6fd6", width: 36, height: 28 },
   },
   {
     selector: 'node[nodeType = "AUTHOR"]',
-    style: { shape: "ellipse", "background-color": "#2f9e6e" },
+    style: { shape: "ellipse", "background-color": "#2f9e6e", width: 32, height: 32 },
   },
   {
     selector: 'node[nodeType = "GENRE"]',
-    style: { shape: "hexagon", "background-color": "#d2892f", width: 28, height: 28 },
+    style: { shape: "hexagon", "background-color": "#d2892f", width: 32, height: 32 },
   },
   {
     selector: 'node[nodeType = "TOPIC"]',
-    style: { shape: "diamond", "background-color": "#8b5fc2", width: 28, height: 28 },
+    style: { shape: "diamond", "background-color": "#8b5fc2", width: 32, height: 32 },
   },
   {
     selector: "node[?highlighted]",
-    style: { "border-width": 3, "border-color": "#e8823c", width: 34, height: 30 },
+    style: { "border-width": 3, "border-color": "#e8823c", width: 40, height: 34 },
   },
   {
     selector: "edge",
@@ -106,7 +114,25 @@ export default function GraphCanvas({
       elements={elements}
       style={{ width: "100%", height: "100%" }}
       stylesheet={stylesheet}
-      layout={{ name: layoutName, animate: false, padding: 48 } as never}
+      layout={
+        {
+          name: layoutName,
+          animate: false,
+          padding: 56,
+          // Tuned up from the defaults so that unconnected or loosely
+          // connected nodes -- e.g. two different clusters that share no
+          // edge -- still get pushed apart instead of settling near the
+          // same point. Cose applies repulsion between *every* node pair,
+          // connected or not, so raising nodeRepulsion/nodeOverlap and
+          // giving it more iterations to converge is what actually fixes
+          // overlapping nodes/labels, not just adding visual polish.
+          nodeRepulsion: 16000,
+          idealEdgeLength: 110,
+          nodeOverlap: 24,
+          gravity: 0.35,
+          numIter: 2500,
+        } as never
+      }
       cy={(cy) => {
         if (cyRef.current === cy) return;
         cyRef.current = cy;
