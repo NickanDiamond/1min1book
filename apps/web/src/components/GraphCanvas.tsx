@@ -89,6 +89,16 @@ function layoutOptions(layoutName: "cose" | "breadthfirst") {
     name: layoutName,
     animate: false,
     padding: 56,
+    // Without this, cose's basic layout starts each run from nodes'
+    // *current* positions and only randomizes ones that don't have a
+    // position yet. Every node added in the same batch (e.g. all of a
+    // book's neighbors arriving in one state update) starts at the exact
+    // same default coordinate -- and repulsion between two points at
+    // zero distance from each other has no direction to push them apart
+    // in, so they can stay glued together indefinitely. Forcing a fresh
+    // random start every run means no two nodes ever share a starting
+    // point, so repulsion always has something to work with.
+    randomize: true,
     // cose applies repulsion between every node pair, connected or not --
     // raising these is what actually keeps loosely-connected clusters
     // (e.g. a shared genre pulling in another book's whole neighborhood)
