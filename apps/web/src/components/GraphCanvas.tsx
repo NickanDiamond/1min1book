@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import CytoscapeComponent from "react-cytoscapejs";
 import type cytoscape from "cytoscape";
 
@@ -18,9 +18,6 @@ const BASE_STYLESHEET: (cytoscape.StylesheetStyle | cytoscape.StylesheetCSS)[] =
       "font-family": "var(--font-geist-sans), sans-serif",
       "text-valign": "bottom",
       "text-margin-y": 8,
-      // A white outline behind the label keeps it legible where an edge
-      // or another node's label crosses behind it, instead of relying on
-      // pure spacing to avoid every collision.
       "text-outline-width": 3,
       "text-outline-color": "#fafafa",
       "text-outline-opacity": 1,
@@ -35,9 +32,6 @@ const BASE_STYLESHEET: (cytoscape.StylesheetStyle | cytoscape.StylesheetCSS)[] =
       "transition-duration": 200,
     },
   },
-  // Shape + color per type. Books read as "documents" (rounded rectangle),
-  // authors as people (circle), genres as broad categories (hexagon), and
-  // topics as facets cutting across books (diamond).
   {
     selector: 'node[nodeType = "BOOK"]',
     style: { shape: "round-rectangle", "background-color": "#3b6fd6", width: 36, height: 28 },
@@ -61,8 +55,6 @@ const BASE_STYLESHEET: (cytoscape.StylesheetStyle | cytoscape.StylesheetCSS)[] =
   {
     selector: "edge",
     style: {
-      // mapData interpolates edge weight (0..1) to a line width (1..6px) --
-      // stronger SIMILAR_TO connections read as visibly thicker lines.
       width: "mapData(weight, 0, 1, 1, 6)",
       "line-color": "#d4d4d8",
       "curve-style": "bezier",
@@ -92,6 +84,23 @@ const DIM_NON_PATH_STYLESHEET: (cytoscape.StylesheetStyle | cytoscape.Stylesheet
   { selector: "edge[?inPath][!highlighted]", style: { opacity: 0.3 } },
 ];
 
+function layoutOptions(layoutName: "cose" | "breadthfirst") {
+  return {
+    name: layoutName,
+    animate: false,
+    padding: 56,
+    // cose applies repulsion between every node pair, connected or not --
+    // raising these is what actually keeps loosely-connected clusters
+    // (e.g. a shared genre pulling in another book's whole neighborhood)
+    // from settling on top of each other.
+    nodeRepulsion: 16000,
+    idealEdgeLength: 110,
+    nodeOverlap: 24,
+    gravity: 0.35,
+    numIter: 2500,
+  } as never;
+}
+
 export interface GraphCanvasProps {
   elements: cytoscape.ElementDefinition[];
   onNodeClick: (id: number) => void;
@@ -109,30 +118,28 @@ export default function GraphCanvas({
   const cyRef = useRef<cytoscape.Core | null>(null);
   const stylesheet = dimNonPath ? [...BASE_STYLESHEET, ...DIM_NON_PATH_STYLESHEET] : BASE_STYLESHEET;
 
+  // react-cytoscapejs only runs its declarative `layout` prop once, on
+  // mount. Elements added afterwards (each new expansion depth-level, a
+  // shared node pulling in a whole new neighborhood, a fresh search) get
+  // added without ever being laid out -- which is what was actually
+  // causing nodes to pile up on top of each other, not insufficient
+  // spacing. Re-running the layout ourselves, explicitly, whenever the
+  // element set changes is what actually fixes it.
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy || elements.length === 0) return;
+    cy.layout(layoutOptions(layoutName)).run();
+  }, [elements, layoutName]);
+
   return (
     <CytoscapeComponent
       elements={elements}
       style={{ width: "100%", height: "100%" }}
       stylesheet={stylesheet}
-      layout={
-        {
-          name: layoutName,
-          animate: false,
-          padding: 56,
-          // Tuned up from the defaults so that unconnected or loosely
-          // connected nodes -- e.g. two different clusters that share no
-          // edge -- still get pushed apart instead of settling near the
-          // same point. Cose applies repulsion between *every* node pair,
-          // connected or not, so raising nodeRepulsion/nodeOverlap and
-          // giving it more iterations to converge is what actually fixes
-          // overlapping nodes/labels, not just adding visual polish.
-          nodeRepulsion: 16000,
-          idealEdgeLength: 110,
-          nodeOverlap: 24,
-          gravity: 0.35,
-          numIter: 2500,
-        } as never
-      }
+      // "preset" -- do nothing on mount; the effect above runs the real
+      // layout immediately after, and stays the single source of truth
+      // for positioning on every subsequent update too.
+      layout={{ name: "preset" } as never}
       cy={(cy) => {
         if (cyRef.current === cy) return;
         cyRef.current = cy;
