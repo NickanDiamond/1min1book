@@ -66,7 +66,7 @@ export default function FilterSidebar({
           className="w-full accent-zinc-900"
         />
         <p className="mt-1 text-xs text-zinc-500">
-          {depth} hop{depth > 1 ? "s" : ""} out when you click a node
+          {depth} hop{depth > 1 ? "s" : ""} out when you search or expand a node
         </p>
       </div>
 

@@ -8,8 +8,7 @@ import FilterSidebar from "@/components/FilterSidebar";
 import DetailsPanel from "@/components/DetailsPanel";
 import { getNeighbors, getNode } from "@/lib/api";
 import { useGraphState } from "@/lib/useGraphState";
-import type { GraphEdge } from "@/lib/useGraphState";
-import type { GraphNode, NodeType } from "@/lib/types";
+import type { GraphNode, Neighbor, NodeType } from "@/lib/types";
 
 const ALL_TYPES: NodeType[] = ["BOOK", "AUTHOR", "GENRE", "TOPIC"];
 
@@ -17,10 +16,29 @@ function ExploreContent() {
   const searchParams = useSearchParams();
   const initialNodeId = searchParams.get("node");
 
-  const { nodes, edges, elements, filterByType, expandNode, reset } = useGraphState();
+  const { elements, filterByType, expandNode, reset } = useGraphState();
   const [visibleTypes, setVisibleTypes] = useState<Set<NodeType>>(new Set(ALL_TYPES));
   const [depth, setDepth] = useState(1);
-  const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
+
+  // The details panel previews whatever node was last clicked or searched
+  // -- fetched fresh from the API every time, independent of what's
+  // actually been placed on the canvas. Clicking around to browse
+  // connections no longer floods the canvas; only the explicit "Show on
+  // canvas" action (or a fresh search) does that.
+  const [previewNode, setPreviewNode] = useState<GraphNode | null>(null);
+  const [previewNeighbors, setPreviewNeighbors] = useState<Neighbor[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  const previewNodeById = useCallback(async (id: number) => {
+    setPreviewLoading(true);
+    try {
+      const [node, neighbors] = await Promise.all([getNode(id), getNeighbors(id)]);
+      setPreviewNode(node);
+      setPreviewNeighbors(neighbors);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, []);
 
   // Fetches `id`'s own record plus its neighbors out to `depth` hops,
   // merging each level into the shared graph state as it resolves so the
@@ -48,12 +66,15 @@ function ExploreContent() {
     [expandNode],
   );
 
-  const selectAndExpand = useCallback(
-    (id: number) => {
-      setSelectedNodeId(id);
-      void expandToDepth(id, depth);
+  // A fresh search is an explicit "show me this" -- clears the canvas,
+  // previews the result, and places it (and its neighborhood) right away.
+  const handleSearchSelect = useCallback(
+    (node: GraphNode) => {
+      reset();
+      void previewNodeById(node.id);
+      void expandToDepth(node.id, depth);
     },
-    [expandToDepth, depth],
+    [reset, previewNodeById, expandToDepth, depth],
   );
 
   useEffect(() => {
@@ -66,27 +87,32 @@ function ExploreContent() {
         // Effect, not the "you might not need an Effect" case this rule
         // otherwise guards against.
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        selectAndExpand(id);
+        void previewNodeById(id);
+        void expandToDepth(id, depth);
       }
     }
     // Only run for the node id present when the page first loads --
-    // re-running on every `selectAndExpand` identity change would re-fetch
-    // on every depth change too, which the slider already handles itself.
+    // re-running on every dependency identity change would re-fetch on
+    // every depth change too, which the slider already handles itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialNodeId]);
 
-  const handleSearchSelect = useCallback(
-    (node: GraphNode) => {
-      // A fresh search starts a clean canvas -- clicking a node already on
-      // the canvas still accumulates (that's the "explore outward"
-      // feature), but searching for something new shouldn't pile it on
-      // top of whatever's already there.
-      reset();
-      selectAndExpand(node.id);
+  // Clicking a node on the canvas (or a connection row in the details
+  // panel) just previews it -- browsing no longer auto-expands the
+  // canvas. The details panel's "Show on canvas" button does that.
+  const handleNodeClick = useCallback(
+    (id: number) => {
+      void previewNodeById(id);
     },
-    [reset, selectAndExpand],
+    [previewNodeById],
   );
-  const handleNodeClick = useCallback((id: number) => selectAndExpand(id), [selectAndExpand]);
+
+  const handleExpand = useCallback(
+    (id: number) => {
+      void expandToDepth(id, depth);
+    },
+    [expandToDepth, depth],
+  );
 
   const handleToggleType = useCallback((type: NodeType) => {
     setVisibleTypes((prev) => {
@@ -99,23 +125,11 @@ function ExploreContent() {
 
   const handleReset = useCallback(() => {
     reset();
-    setSelectedNodeId(null);
+    setPreviewNode(null);
+    setPreviewNeighbors([]);
   }, [reset]);
 
   const filteredElements = useMemo(() => filterByType(visibleTypes), [filterByType, visibleTypes]);
-
-  const selectedNode = selectedNodeId !== null ? (nodes.get(selectedNodeId) ?? null) : null;
-  const selectedNeighbors = useMemo(() => {
-    if (selectedNodeId === null) return [];
-    return Array.from(edges.values())
-      .filter((e) => e.source === selectedNodeId || e.target === selectedNodeId)
-      .map((edge) => {
-        const otherId = edge.source === selectedNodeId ? edge.target : edge.source;
-        const other = nodes.get(otherId);
-        return other ? { edge, other } : null;
-      })
-      .filter((x): x is { edge: GraphEdge; other: GraphNode } => x !== null);
-  }, [edges, nodes, selectedNodeId]);
 
   return (
     <>
@@ -140,7 +154,13 @@ function ExploreContent() {
         )}
       </main>
 
-      <DetailsPanel node={selectedNode} neighbors={selectedNeighbors} onSelectNode={selectAndExpand} />
+      <DetailsPanel
+        node={previewNode}
+        neighbors={previewNeighbors}
+        loading={previewLoading}
+        onSelectNode={(id) => void previewNodeById(id)}
+        onExpand={handleExpand}
+      />
     </>
   );
 }
