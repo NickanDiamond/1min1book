@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { prewarmApi } from "@/lib/prewarm";
 
 const NAV_LINKS = [
   { href: "/explore", label: "Explore" },
@@ -10,6 +12,10 @@ const NAV_LINKS = [
 
 export default function TopBar() {
   const pathname = usePathname();
+
+  useEffect(() => {
+    prewarmApi();
+  }, []);
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-5">
