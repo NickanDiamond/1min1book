@@ -22,6 +22,17 @@ function edgeId(a: number, b: number, relationshipType: string): string {
 
 const STEP_DELAY_MS = 450;
 
+// Long titles ("The Subtle Art of Not Giving a F*ck") are wider than the
+// spacing between neighboring nodes, so their labels overlap even when the
+// nodes themselves are correctly, distinctly placed. Truncating on the
+// canvas and relying on the details panel (which already shows the full
+// name) for the rest is simpler and more reliable than trying to lay out
+// around arbitrary label widths.
+const MAX_LABEL_LENGTH = 22;
+function truncateLabel(name: string): string {
+  return name.length > MAX_LABEL_LENGTH ? `${name.slice(0, MAX_LABEL_LENGTH - 1)}…` : name;
+}
+
 /**
  * Client-side accumulation of the graph the user has explored so far --
  * starts empty, grows one search/expand/path-lookup at a time. This is
@@ -164,7 +175,7 @@ export function useGraphState() {
     const nodeEls: cytoscape.ElementDefinition[] = Array.from(nodes.values()).map((n) => ({
       data: {
         id: String(n.id),
-        label: n.name,
+        label: truncateLabel(n.name),
         nodeType: n.type,
         inPath: pathActive ? pathNodeIds.has(n.id) : false,
         highlighted: pathActive ? revealedNodeIds.has(n.id) : false,

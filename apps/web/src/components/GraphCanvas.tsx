@@ -102,9 +102,12 @@ function layoutOptions(layoutName: "cose" | "breadthfirst") {
     // cose applies repulsion between every node pair, connected or not --
     // raising these is what actually keeps loosely-connected clusters
     // (e.g. a shared genre pulling in another book's whole neighborhood)
-    // from settling on top of each other.
-    nodeRepulsion: 16000,
-    idealEdgeLength: 110,
+    // from settling on top of each other. Bumped up further alongside the
+    // label-truncation fix above, since a hub with a dozen-plus neighbors
+    // (a popular genre or topic) still benefits from extra spacing even
+    // with shorter labels.
+    nodeRepulsion: 20000,
+    idealEdgeLength: 140,
     nodeOverlap: 24,
     gravity: 0.35,
     numIter: 2500,
