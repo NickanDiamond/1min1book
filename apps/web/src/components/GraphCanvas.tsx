@@ -109,7 +109,16 @@ function layoutOptions(layoutName: "cose" | "breadthfirst") {
     nodeRepulsion: 20000,
     idealEdgeLength: 140,
     nodeOverlap: 24,
-    gravity: 0.35,
+    // Lower than cose's 0.4 default. Gravity pulls every node toward one
+    // shared center regardless of whether it's actually connected to
+    // anything else -- at the old value it was dragging separate,
+    // unrelated clusters (e.g. two books that share no author, genre, or
+    // topic) visually close together even though nothing ever draws an
+    // edge between them; the data model never fabricates a connection
+    // that doesn't exist. With gravity this low, mutual repulsion
+    // dominates, so disconnected groups drift apart into visibly
+    // distinct clusters instead of huddling near the middle.
+    gravity: 0.12,
     numIter: 2500,
   } as never;
 }
