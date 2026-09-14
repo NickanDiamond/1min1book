@@ -4,14 +4,17 @@ import com.oneminonebook.graph.graph.Bfs;
 import com.oneminonebook.graph.graph.Dijkstra;
 import com.oneminonebook.graph.graph.Graph;
 import com.oneminonebook.graph.graph.PathStep;
+import com.oneminonebook.graph.model.Book;
 import com.oneminonebook.graph.model.Edge;
 import com.oneminonebook.graph.model.Node;
 import com.oneminonebook.graph.model.RelationshipTypes;
+import com.oneminonebook.graph.repository.BookRepository;
 import com.oneminonebook.graph.repository.EdgeRepository;
 import com.oneminonebook.graph.repository.NodeRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -22,12 +25,16 @@ public class GraphService {
 
     private static final String SIMILAR_TO = "SIMILAR_TO";
 
+    private static final int MAX_RELATED_BOOKS = 5;
+
     private final NodeRepository nodeRepository;
     private final EdgeRepository edgeRepository;
+    private final BookRepository bookRepository;
 
-    public GraphService(NodeRepository nodeRepository, EdgeRepository edgeRepository) {
+    public GraphService(NodeRepository nodeRepository, EdgeRepository edgeRepository, BookRepository bookRepository) {
         this.nodeRepository = nodeRepository;
         this.edgeRepository = edgeRepository;
+        this.bookRepository = bookRepository;
     }
 
     public List<Node> search(String query) {
@@ -36,6 +43,68 @@ public class GraphService {
 
     public Optional<Node> getNode(long id) {
         return nodeRepository.findById(id);
+    }
+
+    /**
+     * Everything the book detail panel needs, resolved in one place:
+     * the book's own row (summary/author/year/cover) plus its genre,
+     * themes, and strongest related books -- all read off this node's
+     * own edges exactly like neighbors() does, just sorted into named
+     * buckets by relationship type instead of one flat list. Empty when
+     * the node doesn't exist or isn't a BOOK.
+     */
+    public Optional<BookDetailView> getBookDetail(long nodeId) {
+        Optional<Node> nodeOpt = nodeRepository.findById(nodeId);
+        if (nodeOpt.isEmpty() || !"BOOK".equals(nodeOpt.get().type())) {
+            return Optional.empty();
+        }
+        Node node = nodeOpt.get();
+        Optional<Book> bookOpt = bookRepository.findByNodeId(nodeId);
+
+        List<Edge> edges = edgeRepository.findByNode(nodeId);
+        List<Long> neighborIds = edges.stream()
+                .map(edge -> edge.sourceNodeId() == nodeId ? edge.targetNodeId() : edge.sourceNodeId())
+                .collect(Collectors.toList());
+        Map<Long, Node> nodesById = nodeRepository.findByIds(neighborIds).stream()
+                .collect(Collectors.toMap(Node::id, n -> n));
+
+        String genre = null;
+        List<ThemeView> themes = new ArrayList<>();
+        List<RelatedBookView> related = new ArrayList<>();
+
+        for (Edge edge : edges) {
+            long neighborId = edge.sourceNodeId() == nodeId ? edge.targetNodeId() : edge.sourceNodeId();
+            Node neighbor = nodesById.get(neighborId);
+            if (neighbor == null) {
+                continue;
+            }
+            switch (edge.relationshipType()) {
+                case "BELONGS_TO_GENRE" -> genre = neighbor.name();
+                case "DISCUSSES" -> themes.add(new ThemeView(neighbor.name(), edge.explanation()));
+                case "SIMILAR_TO" -> related.add(new RelatedBookView(neighbor.id(), neighbor.name(), edge.weight()));
+                default -> {
+                    // WRITTEN_BY -- the author's name is already on the book
+                    // row as authorText, nothing extra to collect here.
+                }
+            }
+        }
+
+        List<RelatedBookView> topRelated = related.stream()
+                .sorted(Comparator.comparingDouble(RelatedBookView::weight).reversed())
+                .limit(MAX_RELATED_BOOKS)
+                .collect(Collectors.toList());
+
+        return Optional.of(new BookDetailView(
+                node.id(),
+                node.name(),
+                bookOpt.map(Book::summary).orElse(null),
+                bookOpt.map(Book::authorText).orElse(null),
+                bookOpt.map(Book::publishedYear).orElse(null),
+                bookOpt.map(Book::coverUrl).orElse(null),
+                genre,
+                themes,
+                topRelated
+        ));
     }
 
     /** Every edge touching this node, resolved to the neighbor's own

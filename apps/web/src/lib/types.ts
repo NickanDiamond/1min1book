@@ -54,3 +54,32 @@ export interface PathStep {
   weight: number | null;
   explanation: string | null;
 }
+
+/** One theme (TOPIC node) a book discusses -- part of BookDetail. */
+export interface BookTheme {
+  name: string;
+  explanation: string | null;
+}
+
+/** One other book connected by a SIMILAR_TO edge -- part of BookDetail,
+ * already sorted strongest-first and capped server-side. */
+export interface RelatedBook {
+  nodeId: number;
+  title: string;
+  weight: number;
+}
+
+/** GET /api/books/{id} -- mirrors service/BookDetailView.java. Only
+ * fetched for BOOK-type nodes; a GENRE/AUTHOR/TOPIC node has no book row
+ * behind it, so this endpoint 404s for those (see DetailsPanel). */
+export interface BookDetail {
+  nodeId: number;
+  title: string;
+  summary: string | null;
+  authorText: string | null;
+  publishedYear: number | null;
+  coverUrl: string | null;
+  genre: string | null;
+  themes: BookTheme[];
+  related: RelatedBook[];
+}

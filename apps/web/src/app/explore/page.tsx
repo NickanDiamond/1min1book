@@ -6,9 +6,9 @@ import GraphCanvas from "@/components/GraphCanvas";
 import SearchBox from "@/components/SearchBox";
 import FilterSidebar from "@/components/FilterSidebar";
 import DetailsPanel from "@/components/DetailsPanel";
-import { getNeighbors, getNode } from "@/lib/api";
+import { getBookDetail, getNeighbors, getNode } from "@/lib/api";
 import { useGraphState } from "@/lib/useGraphState";
-import type { GraphNode, Neighbor, NodeType } from "@/lib/types";
+import type { BookDetail, GraphNode, Neighbor, NodeType } from "@/lib/types";
 
 const ALL_TYPES: NodeType[] = ["BOOK", "AUTHOR", "GENRE", "TOPIC"];
 
@@ -27,14 +27,24 @@ function ExploreContent() {
   // canvas" action (or a fresh search) does that.
   const [previewNode, setPreviewNode] = useState<GraphNode | null>(null);
   const [previewNeighbors, setPreviewNeighbors] = useState<Neighbor[]>([]);
+  const [previewBookDetail, setPreviewBookDetail] = useState<BookDetail | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
   const previewNodeById = useCallback(async (id: number) => {
     setPreviewLoading(true);
     try {
-      const [node, neighbors] = await Promise.all([getNode(id), getNeighbors(id)]);
+      // getBookDetail resolves to null for a non-BOOK node (the API 404s)
+      // -- fetched unconditionally alongside the other two rather than
+      // waiting to learn the node's type first, so this stays one round
+      // trip instead of a two-step waterfall.
+      const [node, neighbors, bookDetail] = await Promise.all([
+        getNode(id),
+        getNeighbors(id),
+        getBookDetail(id),
+      ]);
       setPreviewNode(node);
       setPreviewNeighbors(neighbors);
+      setPreviewBookDetail(bookDetail);
     } finally {
       setPreviewLoading(false);
     }
@@ -127,6 +137,7 @@ function ExploreContent() {
     reset();
     setPreviewNode(null);
     setPreviewNeighbors([]);
+    setPreviewBookDetail(null);
   }, [reset]);
 
   const filteredElements = useMemo(() => filterByType(visibleTypes), [filterByType, visibleTypes]);
@@ -157,6 +168,7 @@ function ExploreContent() {
       <DetailsPanel
         node={previewNode}
         neighbors={previewNeighbors}
+        bookDetail={previewBookDetail}
         loading={previewLoading}
         onSelectNode={(id) => void previewNodeById(id)}
         onExpand={handleExpand}

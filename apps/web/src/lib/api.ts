@@ -1,4 +1,4 @@
-import type { GraphNode, Neighbor, PathStep } from "./types";
+import type { BookDetail, GraphNode, Neighbor, PathStep } from "./types";
 
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -21,6 +21,23 @@ export function getNode(id: number): Promise<GraphNode> {
 
 export function getNeighbors(id: number): Promise<Neighbor[]> {
   return getJson<Neighbor[]>(`/api/nodes/${id}/neighbors`);
+}
+
+/**
+ * Returns null when the node isn't a BOOK (or doesn't exist) -- the API
+ * 404s in both cases, and the caller only ever asks for this on nodes it
+ * already knows are type BOOK, so null just means "nothing to show here."
+ */
+export async function getBookDetail(id: number): Promise<BookDetail | null> {
+  const url = `/api/books/${id}`;
+  const res = await fetch(url);
+  if (res.status === 404) {
+    return null;
+  }
+  if (!res.ok) {
+    throw new Error(`GET ${url} failed: ${res.status}`);
+  }
+  return res.json() as Promise<BookDetail>;
 }
 
 /**

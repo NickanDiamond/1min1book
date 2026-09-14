@@ -1,6 +1,7 @@
 package com.oneminonebook.graph.controller;
 
 import com.oneminonebook.graph.model.Node;
+import com.oneminonebook.graph.service.BookDetailView;
 import com.oneminonebook.graph.service.GraphService;
 import com.oneminonebook.graph.service.NeighborView;
 import com.oneminonebook.graph.service.PathStepView;
@@ -38,6 +39,16 @@ public class GraphController {
     @GetMapping("/nodes/{id}/neighbors")
     public List<NeighborView> neighbors(@PathVariable long id) {
         return graphService.neighbors(id);
+    }
+
+    /** 404 for a node that doesn't exist OR isn't a BOOK -- the detail
+     * panel only calls this for BOOK nodes, so either case just means
+     * there's nothing here to show. */
+    @GetMapping("/books/{id}")
+    public ResponseEntity<BookDetailView> bookDetail(@PathVariable long id) {
+        return graphService.getBookDetail(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     /**
