@@ -36,6 +36,34 @@ class DijkstraTest {
     }
 
     @Test
+    void prefersShortStrongPathOverLongerNearlyAsStrongChain() {
+        // 1 --0.99--2--0.99--3--0.99--4--0.99--5--0.99-- 6  (five very strong hops)
+        // 1 --0.94------------------------------------- 6  (one strong direct hop)
+        // Without HOP_PENALTY, cost = 1 - weight alone would make the chain
+        // cost 0.01*5 = 0.05 and the direct edge cost 0.06 -- the chain
+        // would (barely) win, producing a 5-hop "most related" path when a
+        // nearly-as-strong direct connection was sitting right there. With
+        // HOP_PENALTY = 0.05, the chain costs (0.01+0.05)*5 = 0.30 against
+        // the direct edge's 0.06+0.05 = 0.11 -- the direct edge should win
+        // decisively instead.
+        List<Edge> edges = List.of(
+                new Edge(1, 1, 2, "SIMILAR_TO", 0.99, null),
+                new Edge(2, 2, 3, "SIMILAR_TO", 0.99, null),
+                new Edge(3, 3, 4, "SIMILAR_TO", 0.99, null),
+                new Edge(4, 4, 5, "SIMILAR_TO", 0.99, null),
+                new Edge(5, 5, 6, "SIMILAR_TO", 0.99, null),
+                new Edge(6, 1, 6, "SIMILAR_TO", 0.94, null)
+        );
+        Graph graph = Graph.fromEdges(edges);
+
+        Optional<List<PathStep>> path = Dijkstra.shortestPath(graph, 1, 6);
+
+        assertTrue(path.isPresent());
+        List<Long> nodeIds = path.get().stream().map(PathStep::nodeId).collect(Collectors.toList());
+        assertEquals(List.of(1L, 6L), nodeIds);
+    }
+
+    @Test
     void takesDirectEdgeWhenItIsAlsoTheStrongestOption() {
         List<Edge> edges = List.of(
                 new Edge(1, 1, 2, "SIMILAR_TO", 0.2, null),

@@ -11,17 +11,39 @@ import java.util.PriorityQueue;
  * Weighted shortest path where edge weight represents connection
  * *strength* in [0, 1] (1.0 = strongest, from the SIMILAR_TO jaccard/genre
  * formula; other relationship types default to 1.0). Dijkstra minimizes a
- * sum of costs, so each edge is traversed at cost = (1 - weight): a chain
- * of strong connections (weight close to 1 => cost close to 0) beats one
- * weak direct edge (weight close to 0 => cost close to 1). That's the
- * behavior we want for "most related" -- a book connected through three
- * strong SIMILAR_TO edges is more related than one with a single weak
- * edge, even though the weak edge is fewer hops. See DijkstraTest for the
- * case that proves this beats a naive "minimize hop count" answer.
+ * sum of costs, so each edge is traversed at cost = (1 - weight) +
+ * HOP_PENALTY: a chain of strong connections (weight close to 1 => cost
+ * close to HOP_PENALTY per hop) beats one weak direct edge (weight close
+ * to 0 => cost close to 1). That's the behavior we want for "most
+ * related" -- a book connected through three strong SIMILAR_TO edges is
+ * more related than one with a single weak edge, even though the weak
+ * edge is fewer hops. See DijkstraTest.prefersChainOfStrongConnections...
+ * for the case that proves this beats a naive "minimize hop count"
+ * answer.
+ *
+ * HOP_PENALTY exists to bound the *other* direction of that same
+ * tradeoff: without it, a cost of exactly (1 - weight) has no floor, so
+ * an arbitrarily long chain of edges that are each merely very strong
+ * (not perfect) can out-cost a single edge that's almost as strong --
+ * five 0.99 hops (total cost 0.05) beating one direct 0.94 edge (cost
+ * 0.06) is a real case, and a 5-hop "most related" path when a
+ * nearly-as-strong direct connection exists reads as the algorithm
+ * overreaching, not as a genuinely closer relationship. Charging a flat
+ * cost per hop regardless of how strong that hop is means a longer path
+ * has to be *decisively* stronger per hop to win, not just cheaper by a
+ * sliver -- see DijkstraTest.prefersShortStrongPathOverLongerNearlyAsStrongChain.
  */
 public final class Dijkstra {
 
     private Dijkstra() {}
+
+    // Tuned by hand, not derived: small enough that a genuinely much
+    // stronger chain still wins decisively (three 0.9 hops vs one 0.1
+    // direct edge isn't even close), large enough that even a perfect,
+    // free (weight = 1.0, cost = 0) hop still costs something to take --
+    // so a longer path always has to buy its extra hops with real
+    // strength, not just accumulate past a shorter one by a hair.
+    private static final double HOP_PENALTY = 0.05;
 
     private record QueueItem(double cost, long nodeId) implements Comparable<QueueItem> {
         @Override
@@ -52,7 +74,7 @@ public final class Dijkstra {
                 break;
             }
             for (Graph.AdjEdge edge : graph.neighbors(current.nodeId())) {
-                double candidate = current.cost() + (1.0 - edge.weight());
+                double candidate = current.cost() + (1.0 - edge.weight()) + HOP_PENALTY;
                 if (candidate < bestCost.getOrDefault(edge.neighborId(), Double.POSITIVE_INFINITY)) {
                     bestCost.put(edge.neighborId(), candidate);
                     prevNode.put(edge.neighborId(), current.nodeId());
