@@ -99,7 +99,7 @@ export default function ConnectPage() {
                   </div>
                   {step.explanation && (
                     <div className="mt-0.5 text-xs text-zinc-500">
-                      via {step.relationshipType?.toLowerCase().replaceAll("_", " ")}
+                      via {step.relationshipLabel?.toLowerCase().replaceAll("_", " ")}
                       {typeof step.weight === "number" && ` (weight ${step.weight.toFixed(2)})`}
                       {" — "}
                       {step.explanation}

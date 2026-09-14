@@ -10,6 +10,17 @@ export type RelationshipType =
   | "DISCUSSES"
   | "SIMILAR_TO";
 
+/**
+ * The direction-correct label for one specific relationship as read from
+ * one particular side of it -- mirrors model/RelationshipTypes.java.
+ * relationshipType identifies the underlying edge and never changes;
+ * relationshipLabel is what to actually show the user, and flips to the
+ * inverse (e.g. "WROTE" instead of "WRITTEN_BY") when a relationship is
+ * being read from its target back to its source. SIMILAR_TO has no
+ * inverse -- it's symmetric, so its label always equals its type.
+ */
+export type RelationshipLabel = RelationshipType | "WROTE" | "DISCUSSED_IN" | "CONTAINS_BOOK";
+
 /** GET /api/search, GET /api/nodes/{id} -- mirrors model/Node.java */
 export interface GraphNode {
   id: number;
@@ -24,6 +35,7 @@ export interface Neighbor {
   nodeType: NodeType;
   nodeName: string;
   relationshipType: RelationshipType;
+  relationshipLabel: RelationshipLabel;
   weight: number;
   explanation: string | null;
 }
@@ -38,6 +50,7 @@ export interface PathStep {
   nodeType: NodeType | null;
   nodeName: string | null;
   relationshipType: RelationshipType | null;
+  relationshipLabel: RelationshipLabel | null;
   weight: number | null;
   explanation: string | null;
 }

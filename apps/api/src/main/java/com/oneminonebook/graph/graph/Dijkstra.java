@@ -32,7 +32,7 @@ public final class Dijkstra {
 
     public static Optional<List<PathStep>> shortestPath(Graph graph, long fromId, long toId) {
         if (fromId == toId) {
-            return Optional.of(List.of(new PathStep(fromId, null, null, null)));
+            return Optional.of(List.of(new PathStep(fromId, null, null, null, null)));
         }
 
         Map<Long, Double> bestCost = new HashMap<>();
@@ -75,10 +75,10 @@ public final class Dijkstra {
         long node = toId;
         while (prevNode.containsKey(node)) {
             Graph.AdjEdge edge = prevEdge.get(node);
-            path.addFirst(new PathStep(node, edge.relationshipType(), edge.weight(), edge.explanation()));
+            path.addFirst(new PathStep(node, edge.relationshipType(), edge.relationshipLabel(), edge.weight(), edge.explanation()));
             node = prevNode.get(node);
         }
-        path.addFirst(new PathStep(node, null, null, null));
+        path.addFirst(new PathStep(node, null, null, null, null));
         return path;
     }
 }

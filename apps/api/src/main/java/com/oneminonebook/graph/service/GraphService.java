@@ -6,6 +6,7 @@ import com.oneminonebook.graph.graph.Graph;
 import com.oneminonebook.graph.graph.PathStep;
 import com.oneminonebook.graph.model.Edge;
 import com.oneminonebook.graph.model.Node;
+import com.oneminonebook.graph.model.RelationshipTypes;
 import com.oneminonebook.graph.repository.EdgeRepository;
 import com.oneminonebook.graph.repository.NodeRepository;
 import org.springframework.stereotype.Service;
@@ -51,12 +52,22 @@ public class GraphService {
 
         List<NeighborView> views = new ArrayList<>();
         for (Edge edge : edges) {
-            long neighborId = edge.sourceNodeId() == nodeId ? edge.targetNodeId() : edge.sourceNodeId();
+            boolean forward = edge.sourceNodeId() == nodeId;
+            long neighborId = forward ? edge.targetNodeId() : edge.sourceNodeId();
             Node neighbor = nodesById.get(neighborId);
             if (neighbor != null) {
+                // forward: nodeId is the edge's own source, so the stored
+                // type already reads correctly (a book asking about its
+                // WRITTEN_BY edge still means "written by"). Otherwise
+                // nodeId is the target looking back at its source, which
+                // needs the inverse label (an author's WRITTEN_BY edge
+                // reads as "wrote", not "written by").
+                String label = forward
+                        ? RelationshipTypes.forward(edge.relationshipType())
+                        : RelationshipTypes.backward(edge.relationshipType());
                 views.add(new NeighborView(
                         neighbor.id(), neighbor.type(), neighbor.name(),
-                        edge.relationshipType(), edge.weight(), edge.explanation()
+                        edge.relationshipType(), label, edge.weight(), edge.explanation()
                 ));
             }
         }
@@ -109,7 +120,7 @@ public class GraphService {
                     String name = node != null ? node.name() : null;
                     return new PathStepView(
                             step.nodeId(), type, name,
-                            step.relationshipType(), step.weight(), step.explanation()
+                            step.relationshipType(), step.relationshipLabel(), step.weight(), step.explanation()
                     );
                 })
                 .collect(Collectors.toList());

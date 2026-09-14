@@ -77,7 +77,7 @@ export default function DetailsPanel({
                     </span>
                   </div>
                   <div className="mt-0.5 text-xs text-zinc-500">
-                    {n.relationshipType.toLowerCase().replaceAll("_", " ")}
+                    {n.relationshipLabel.toLowerCase().replaceAll("_", " ")}
                     {n.relationshipType === "SIMILAR_TO" && ` (weight ${n.weight.toFixed(2)})`}
                     {n.explanation && ` — ${n.explanation}`}
                   </div>
