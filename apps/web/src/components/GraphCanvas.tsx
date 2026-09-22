@@ -109,6 +109,15 @@ function layoutOptions(layoutName: "cose" | "breadthfirst") {
     nodeRepulsion: 20000,
     idealEdgeLength: 140,
     nodeOverlap: 24,
+    // A hub that several books share at once (a common genre, an author
+    // with multiple books, a handful of overlapping topics) still tends
+    // to converge tightly enough that labels -- which extend well past
+    // the ~30px node itself, especially for a long title -- overlap each
+    // other even though the node centers are reasonably spaced. cose
+    // applies this as a uniform multiplier over the whole solved layout,
+    // so it spreads everything out proportionally without changing the
+    // relative arrangement the physics already settled on.
+    spacingFactor: 1.4,
     // Lower than cose's 0.4 default. Gravity pulls every node toward one
     // shared center regardless of whether it's actually connected to
     // anything else -- at the old value it was dragging separate,

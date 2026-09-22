@@ -66,7 +66,7 @@ export default function DetailsPanel({
       </div>
 
       {showBookDetails ? (
-        <BookDetails detail={bookDetail} loading={loading} onSelectNode={onSelectNode} />
+        <BookDetails detail={bookDetail} />
       ) : (
         <ConnectionsList neighbors={neighbors} loading={loading} onSelectNode={onSelectNode} />
       )}
@@ -74,15 +74,7 @@ export default function DetailsPanel({
   );
 }
 
-function BookDetails({
-  detail,
-  loading,
-  onSelectNode,
-}: {
-  detail: BookDetail;
-  loading: boolean;
-  onSelectNode: (id: number) => void;
-}) {
+function BookDetails({ detail }: { detail: BookDetail }) {
   return (
     <>
       {(detail.authorText || detail.genre) && (
@@ -108,29 +100,9 @@ function BookDetails({
         </div>
       )}
 
-      <div>
-        <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
-          Related {!loading && detail.related.length > 0 && `(${detail.related.length})`}
-        </h3>
-        {detail.related.length === 0 ? (
-          <p className="text-sm text-zinc-400">No closely related books yet.</p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {detail.related.map((r) => (
-              <li key={r.nodeId}>
-                <button
-                  type="button"
-                  onClick={() => onSelectNode(r.nodeId)}
-                  className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-zinc-50"
-                >
-                  <span className="text-zinc-900">{r.title}</span>
-                  <span className="ml-2 text-xs text-zinc-400">{r.weight.toFixed(2)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {/* Related books live in the left sidebar now (FilterSidebar's
+          "Similar books" list) as a one-click add-to-canvas, instead of
+          duplicating them here as a preview-only list. */}
     </>
   );
 }

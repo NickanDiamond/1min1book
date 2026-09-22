@@ -1,6 +1,6 @@
 "use client";
 
-import type { NodeType } from "@/lib/types";
+import type { NodeType, RelatedBook } from "@/lib/types";
 
 const TYPE_OPTIONS: { type: NodeType; label: string; color: string; shape: string }[] = [
   { type: "BOOK", label: "Books", color: "#3b6fd6", shape: "rounded-[3px]" },
@@ -15,6 +15,14 @@ export interface FilterSidebarProps {
   depth: number;
   onDepthChange: (depth: number) => void;
   onReset: () => void;
+  /** The currently-previewed book's SIMILAR_TO neighbors, already sorted
+   * strongest-first -- null when nothing's previewed, or the previewed
+   * node isn't a book. */
+  relatedBooks: RelatedBook[] | null;
+  /** Places a related book (and its own neighborhood) on the canvas and
+   * switches the details panel to it, in one click -- no separate preview
+   * step first. */
+  onAddRelated: (nodeId: number) => void;
 }
 
 export default function FilterSidebar({
@@ -23,6 +31,8 @@ export default function FilterSidebar({
   depth,
   onDepthChange,
   onReset,
+  relatedBooks,
+  onAddRelated,
 }: FilterSidebarProps) {
   return (
     <aside className="flex w-64 shrink-0 flex-col gap-6 overflow-y-auto border-r border-zinc-200 bg-white px-4 py-5">
@@ -69,6 +79,29 @@ export default function FilterSidebar({
           {depth} hop{depth > 1 ? "s" : ""} out when you search or expand a node
         </p>
       </div>
+
+      {relatedBooks && relatedBooks.length > 0 && (
+        <div>
+          <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
+            Similar books
+          </h2>
+          <ul className="flex flex-col gap-1">
+            {relatedBooks.map((r) => (
+              <li key={r.nodeId}>
+                <button
+                  type="button"
+                  onClick={() => onAddRelated(r.nodeId)}
+                  title="Add to canvas"
+                  className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"
+                >
+                  <span className="truncate">{r.title}</span>
+                  <span className="ml-2 shrink-0 text-xs text-zinc-400">{r.weight.toFixed(2)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <button
         type="button"

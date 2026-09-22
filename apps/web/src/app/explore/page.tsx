@@ -129,6 +129,19 @@ function ExploreContent() {
     [expandToDepth, depth],
   );
 
+  // Clicking a "Similar books" entry in the sidebar previews it *and*
+  // commits it straight to the canvas in one click -- unlike browsing a
+  // connection in the details panel (handleNodeClick), which only
+  // previews. This is the fast path for "add this related book" that
+  // doesn't require a second, separate "Show on canvas" click.
+  const handleAddRelated = useCallback(
+    (id: number) => {
+      void previewNodeById(id);
+      void expandToDepth(id, depth);
+    },
+    [previewNodeById, expandToDepth, depth],
+  );
+
   const handleToggleType = useCallback((type: NodeType) => {
     setVisibleTypes((prev) => {
       const next = new Set(prev);
@@ -155,6 +168,8 @@ function ExploreContent() {
         depth={depth}
         onDepthChange={setDepth}
         onReset={handleReset}
+        relatedBooks={previewBookDetail?.related ?? null}
+        onAddRelated={handleAddRelated}
       />
 
       <main className="relative min-h-0 flex-1">
