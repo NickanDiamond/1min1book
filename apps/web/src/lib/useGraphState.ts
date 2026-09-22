@@ -22,13 +22,15 @@ function edgeId(a: number, b: number, relationshipType: string): string {
 
 const STEP_DELAY_MS = 450;
 
-// Long titles ("The Subtle Art of Not Giving a F*ck") are wider than the
-// spacing between neighboring nodes, so their labels overlap even when the
-// nodes themselves are correctly, distinctly placed. Truncating on the
-// canvas and relying on the details panel (which already shows the full
-// name) for the rest is simpler and more reliable than trying to lay out
-// around arbitrary label widths.
-const MAX_LABEL_LENGTH = 22;
+// GraphCanvas now wraps long labels onto a second line (text-wrap: wrap +
+// text-max-width, with BOOK nodes additionally sizing themselves to their
+// own title) instead of relying on this to shorten them first -- an
+// ellipsis was losing real title text the canvas has room for once it
+// actually accounts for label size during layout. This safety cap only
+// exists for the pathological case (a title/subtitle long enough that
+// even two wrapped lines would look broken), and is generous enough that
+// no real book/author/genre/topic name in this dataset should ever hit it.
+const MAX_LABEL_LENGTH = 80;
 function truncateLabel(name: string): string {
   return name.length > MAX_LABEL_LENGTH ? `${name.slice(0, MAX_LABEL_LENGTH - 1)}…` : name;
 }
