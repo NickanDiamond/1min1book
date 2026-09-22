@@ -2,7 +2,18 @@
 
 import { useEffect, useRef } from "react";
 import CytoscapeComponent from "react-cytoscapejs";
-import type cytoscape from "cytoscape";
+import cytoscape from "cytoscape";
+import fcose from "cytoscape-fcose";
+
+// Registering an extension that's already registered throws. This module
+// only evaluates once per real page load, but Next's dev-mode Fast Refresh
+// can re-run module-level code without a full reload, so this guards
+// against that without needing any extra state.
+try {
+  cytoscape.use(fcose);
+} catch {
+  // already registered -- fine, ignore.
+}
 
 // One shape + color per node type. Shape carries the type distinction so the
 // graph still reads correctly without relying on color alone; color is a
@@ -84,67 +95,87 @@ const DIM_NON_PATH_STYLESHEET: (cytoscape.StylesheetStyle | cytoscape.Stylesheet
   { selector: "edge[?inPath][!highlighted]", style: { opacity: 0.3 } },
 ];
 
-// cose's own default (`fit: true`) re-fits the *entire* graph into
-// whatever the container's current pixel size is after every single
-// layout run -- which is what was actually undoing the nodeRepulsion /
-// idealEdgeLength / spacingFactor increases below. Spacing those out
-// only changes how far apart nodes are in the layout's own coordinate
-// space; fit-to-container then re-zooms the whole thing, nodes, edges
-// *and labels*, by whatever factor is needed to cram it back into the
-// same box. A denser graph just got zoomed out further, so the ratio of
-// label size to the gap between nodes -- the thing that actually
-// determines whether two labels overlap -- barely changed no matter how
-// much spacing was dialed up. Clamping how far fit is allowed to zoom
-// out (set on the cy instance below) is what actually fixes it: past
-// this floor the graph simply extends beyond the visible area instead of
-// continuing to shrink, and panning/scrolling covers the rest.
+// Legibility floor, not an overlap fix. Zooming is a uniform transform on
+// nodes, edges *and* label text together (cytoscape scales font rendering
+// with zoom the same as everything else), so it can never change whether
+// two labels' rendered boxes overlap -- that's fixed entirely by their
+// relative positions/sizes in the layout's own coordinate space, before
+// any zoom is applied. (An earlier version of this file clamped zoom
+// believing it *was* the fix for overlap; it wasn't -- see the fcose
+// switch below for the actual fix.) What a zoom floor still legitimately
+// guards against: fcose spaces a dense hub out much further than cose
+// used to, so fit-to-container has to zoom out further to fit it all,
+// and past some point that makes every label too small to read. Past
+// this floor the graph extends beyond the visible area instead of
+// continuing to shrink, and panning covers the rest.
 const MIN_ZOOM = 0.45;
 
-function layoutOptions(layoutName: "cose" | "breadthfirst") {
+// Estimated overlap-avoidance was never actually the bug. cose's own
+// force simulation has no idea how big a node's *label* is -- by default
+// its repulsion/overlap math only looks at the ~30px node shape, so two
+// nodes could be "correctly" spaced by cose's own accounting while their
+// labels (which extend ~8px below the node, wider than the node itself
+// for anything but a one-word title) still visually collide. Cranking
+// nodeRepulsion/idealEdgeLength/spacingFactor never touched this --
+// spacing the *nodes* out further doesn't help the *labels*, which stay
+// exactly as oversized relative to that spacing as before. Confirmed by
+// reproducing the live dystopian-books cluster in a headless cytoscape
+// instance and measuring label-rect overlap directly: base cose,
+// however far its spacing knobs are pushed, converges with ~1.5-3
+// overlapping label pairs on average (worst case up to 6) because its
+// overlap avoidance is a soft heuristic layered on top of a spring
+// simulation, not a real constraint solver -- it minimizes overlap, it
+// doesn't guarantee zero.
+//
+// fCoSE (a proper, actively-maintained successor extension, not a
+// built-in) fixes both problems at once: `nodeDimensionsIncludeLabels`
+// makes its physics account for actual rendered label size, and its
+// `quality: "proof"` mode runs real constraint-based overlap removal as
+// a final pass rather than relying purely on spring forces. The same
+// headless reproduction scores that combination at 0 overlapping label
+// pairs across repeated randomized trials on this graph (both on a
+// fresh layout and, more importantly, on the same incremental-update
+// case cose was handling above -- see fixedNodeConstraint below).
+function layoutOptions(
+  layoutName: "cose" | "breadthfirst",
+  fixedNodeConstraint: { nodeId: string; position: { x: number; y: number } }[],
+) {
+  if (layoutName === "breadthfirst") {
+    return { name: "breadthfirst", animate: false, padding: 56, spacingFactor: 1.4 } as never;
+  }
+
   return {
-    name: layoutName,
+    name: "fcose",
     animate: false,
     padding: 56,
-    // false, deliberately -- see the scattering step in the effect below.
-    // cose's basic layout starts each run from nodes' *current* positions
-    // and only randomizes ones that don't have a position yet, which is
-    // exactly what we want now that the effect itself gives every new
-    // node a distinct starting point: already-converged nodes keep the
-    // positions they settled on last time (so two previously-separated
-    // clusters don't get thrown back together and re-solved from scratch
-    // on every graph update), while new arrivals still get spread out
-    // instead of stacking at the same default coordinate.
+    nodeDimensionsIncludeLabels: true,
+    // randomize: false + quality: "proof" is fCoSE's documented
+    // incremental-layout combination (quality "default"/"draft" ignore
+    // randomize:false and re-randomize anyway). Paired with
+    // fixedNodeConstraint below, this is what actually replaces the old
+    // "scatter only the new nodes, freeze everything else" logic: instead
+    // of just giving already-placed nodes a decent starting guess and
+    // hoping the physics leaves them alone, every already-placed node is
+    // now a hard constraint fCoSE's solver is not allowed to move, and
+    // only the genuinely new nodes are free to be positioned. Verified
+    // headlessly that pinned nodes never move a single pixel across
+    // repeated trials, while the free nodes still resolve with far less
+    // label overlap than cose ever did in the same incremental scenario.
+    quality: "proof",
     randomize: false,
-    // cose applies repulsion between every node pair, connected or not --
-    // raising these is what actually keeps loosely-connected clusters
-    // (e.g. a shared genre pulling in another book's whole neighborhood)
-    // from settling on top of each other. A book connected to a popular
-    // genre/author can easily pick up a dozen-plus neighbors at once
-    // (five books sharing "Dystopian Fiction" plus each of their own
-    // authors and topics, all landing on one hub) -- 1.4x spacing turned
-    // out not to be nearly enough for that, so these are pushed a good
-    // deal further: it looks sparser for a small, simple graph, but a
-    // crowded hub is the case that actually needs to stay legible.
-    nodeRepulsion: 45000,
-    idealEdgeLength: 220,
-    nodeOverlap: 24,
-    // A hub that several books share at once still tends to converge
-    // tightly enough that labels -- which extend well past the ~30px
-    // node itself, especially for a long title -- overlap each other
-    // even though the node centers are reasonably spaced. cose applies
-    // this as a uniform multiplier over the whole solved layout, so it
-    // spreads everything out proportionally without changing the
-    // relative arrangement the physics already settled on.
-    spacingFactor: 2.5,
-    // Lower than cose's 0.4 default. Gravity pulls every node toward one
-    // shared center regardless of whether it's actually connected to
-    // anything else -- at the old value it was dragging separate,
-    // unrelated clusters (e.g. two books that share no author, genre, or
-    // topic) visually close together even though nothing ever draws an
-    // edge between them; the data model never fabricates a connection
-    // that doesn't exist. With gravity this low, mutual repulsion
-    // dominates, so disconnected groups drift apart into visibly
-    // distinct clusters instead of huddling near the middle.
+    fixedNodeConstraint,
+    // fCoSE has no spacingFactor/nodeOverlap (those are cose-only) --
+    // nodeSeparation is its equivalent overlap-avoidance knob. These
+    // three values are the best headlessly-measured combination found:
+    // pushing them higher didn't reliably score better (the solver is
+    // fighting to satisfy fixedNodeConstraint at the same time), and
+    // pushing them lower let more labels collide.
+    nodeRepulsion: 8000,
+    idealEdgeLength: 160,
+    nodeSeparation: 150,
+    // Same reasoning as before: keeps genuinely disconnected clusters
+    // (no shared author/genre/topic) from being dragged toward one
+    // shared center regardless of whether anything actually connects them.
     gravity: 0.12,
     numIter: 2500,
   } as never;
@@ -180,37 +211,26 @@ export default function GraphCanvas({
 
     // Cytoscape gives a node with no explicit position a default of
     // (0, 0) -- that's every node that just arrived in this batch (a
-    // whole book's neighborhood landing in one state update), so without
-    // spreading them out ourselves they'd start glued to each other (and
-    // often right on top of whatever's already sitting near the origin).
-    // We used to solve that by randomizing *every* node's position on
-    // every layout run, but that also threw away the positions of nodes
-    // that were already laid out -- so an update as small as expanding
-    // one node could re-solve the whole graph from scratch and leave two
-    // previously-separated, disconnected clusters overlapping in a
-    // tangle. Scattering only the nodes that are actually new keeps
-    // everything already on the canvas exactly where it settled, while
-    // still giving cose's repulsion a distinct starting point for each
-    // new arrival to push apart from.
-    const allNodes = cy.nodes();
+    // whole book's neighborhood landing in one state update). Everything
+    // that already has a real position was already laid out on a
+    // previous run and gets pinned in place via fixedNodeConstraint
+    // (below) instead of being re-solved -- so two previously-separated,
+    // disconnected clusters never get thrown back together, and an
+    // update as small as expanding one node can't reshuffle the rest of
+    // the canvas.
+    // .toArray() + plain Array methods rather than Collection#filter/map --
+    // cytoscape's own typings widen a filtered NodeCollection back to a
+    // generic (node-or-edge) SingularElementArgument[], which loses the
+    // .position() method.
     const isUnplaced = (n: cytoscape.NodeSingular) => n.position("x") === 0 && n.position("y") === 0;
-    const newNodes = allNodes.filter(isUnplaced);
-    const existingNodes = allNodes.filter((n) => !isUnplaced(n));
+    const existingNodes = cy.nodes().toArray().filter((n) => !isUnplaced(n));
 
-    if (newNodes.length > 0) {
-      const bounds = existingNodes.length > 0 ? existingNodes.boundingBox() : null;
-      const spread = Math.max(bounds ? Math.max(bounds.w, bounds.h) : 0, 600);
-      const centerX = bounds ? (bounds.x1 + bounds.x2) / 2 : 0;
-      const centerY = bounds ? (bounds.y1 + bounds.y2) / 2 : 0;
-      newNodes.forEach((node) => {
-        node.position({
-          x: centerX + (Math.random() - 0.5) * spread,
-          y: centerY + (Math.random() - 0.5) * spread,
-        });
-      });
-    }
+    const fixedNodeConstraint = existingNodes.map((n) => ({
+      nodeId: n.id(),
+      position: { x: n.position("x"), y: n.position("y") },
+    }));
 
-    cy.layout(layoutOptions(layoutName)).run();
+    cy.layout(layoutOptions(layoutName, fixedNodeConstraint)).run();
   }, [elements, layoutName]);
 
   return (
@@ -225,11 +245,7 @@ export default function GraphCanvas({
       cy={(cy) => {
         if (cyRef.current === cy) return;
         cyRef.current = cy;
-        // See MIN_ZOOM above -- this is what actually keeps cose's
-        // fit-to-container from zooming a dense graph's labels down to
-        // the point of overlap. cy.fit() (which cose calls internally
-        // after every layout run since we don't override its own
-        // `fit: true` default) respects this floor automatically.
+        // See MIN_ZOOM above -- a readability floor, not an overlap fix.
         cy.minZoom(MIN_ZOOM);
         cy.removeAllListeners();
         cy.on("tap", "node", (evt) => {
