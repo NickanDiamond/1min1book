@@ -22,3 +22,4 @@ credentials.json
 etl/data/
 apps/api/src/main/resources/application-local.properties
 apps/api/target/
+_to_delete/

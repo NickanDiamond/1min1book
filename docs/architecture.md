@@ -1,7 +1,5 @@
 # Architecture decisions
 
-Full document with diagrams: https://claude.ai/code/artifact/2606b156-0b38-47b1-9738-bd999151d7f7
-
 - **Postgres, not Neo4j.** At 50–100 nodes a graph DB buys nothing, and it does the
   traversal *for* you — which is exactly the part meant to demonstrate you can
   implement BFS/Dijkstra yourself.

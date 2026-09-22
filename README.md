@@ -1,12 +1,12 @@
 # 1Min1Book Knowledge Graph
 
-Interactive book knowledge graph built on 1Min1Book data — a software engineering
-portfolio project (full-stack + ETL + self-implemented graph algorithms).
+Interactive book knowledge graph built on 1Min1Book data — a full-stack
+portfolio project combining a Spring Boot API, a Next.js/TypeScript frontend,
+a Python ETL pipeline, and hand-written graph algorithms (BFS + Dijkstra).
 
-Full architecture plan (decisions, schema diagram, MVP phases):
-https://claude.ai/code/artifact/2606b156-0b38-47b1-9738-bd999151d7f7
+![Explorer screenshot](docs/screenshot.png)
 
-Condensed version also lives at `docs/architecture.md` in this repo.
+Architecture decisions, schema, and design tradeoffs: [`docs/architecture.md`](docs/architecture.md)
 
 ## Live
 
