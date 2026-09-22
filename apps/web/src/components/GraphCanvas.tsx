@@ -84,6 +84,22 @@ const DIM_NON_PATH_STYLESHEET: (cytoscape.StylesheetStyle | cytoscape.Stylesheet
   { selector: "edge[?inPath][!highlighted]", style: { opacity: 0.3 } },
 ];
 
+// cose's own default (`fit: true`) re-fits the *entire* graph into
+// whatever the container's current pixel size is after every single
+// layout run -- which is what was actually undoing the nodeRepulsion /
+// idealEdgeLength / spacingFactor increases below. Spacing those out
+// only changes how far apart nodes are in the layout's own coordinate
+// space; fit-to-container then re-zooms the whole thing, nodes, edges
+// *and labels*, by whatever factor is needed to cram it back into the
+// same box. A denser graph just got zoomed out further, so the ratio of
+// label size to the gap between nodes -- the thing that actually
+// determines whether two labels overlap -- barely changed no matter how
+// much spacing was dialed up. Clamping how far fit is allowed to zoom
+// out (set on the cy instance below) is what actually fixes it: past
+// this floor the graph simply extends beyond the visible area instead of
+// continuing to shrink, and panning/scrolling covers the rest.
+const MIN_ZOOM = 0.45;
+
 function layoutOptions(layoutName: "cose" | "breadthfirst") {
   return {
     name: layoutName,
@@ -209,6 +225,12 @@ export default function GraphCanvas({
       cy={(cy) => {
         if (cyRef.current === cy) return;
         cyRef.current = cy;
+        // See MIN_ZOOM above -- this is what actually keeps cose's
+        // fit-to-container from zooming a dense graph's labels down to
+        // the point of overlap. cy.fit() (which cose calls internally
+        // after every layout run since we don't override its own
+        // `fit: true` default) respects this floor automatically.
+        cy.minZoom(MIN_ZOOM);
         cy.removeAllListeners();
         cy.on("tap", "node", (evt) => {
           onNodeClick(Number(evt.target.id()));
