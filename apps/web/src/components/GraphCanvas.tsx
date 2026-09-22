@@ -89,16 +89,16 @@ function layoutOptions(layoutName: "cose" | "breadthfirst") {
     name: layoutName,
     animate: false,
     padding: 56,
-    // Without this, cose's basic layout starts each run from nodes'
-    // *current* positions and only randomizes ones that don't have a
-    // position yet. Every node added in the same batch (e.g. all of a
-    // book's neighbors arriving in one state update) starts at the exact
-    // same default coordinate -- and repulsion between two points at
-    // zero distance from each other has no direction to push them apart
-    // in, so they can stay glued together indefinitely. Forcing a fresh
-    // random start every run means no two nodes ever share a starting
-    // point, so repulsion always has something to work with.
-    randomize: true,
+    // false, deliberately -- see the scattering step in the effect below.
+    // cose's basic layout starts each run from nodes' *current* positions
+    // and only randomizes ones that don't have a position yet, which is
+    // exactly what we want now that the effect itself gives every new
+    // node a distinct starting point: already-converged nodes keep the
+    // positions they settled on last time (so two previously-separated
+    // clusters don't get thrown back together and re-solved from scratch
+    // on every graph update), while new arrivals still get spread out
+    // instead of stacking at the same default coordinate.
+    randomize: false,
     // cose applies repulsion between every node pair, connected or not --
     // raising these is what actually keeps loosely-connected clusters
     // (e.g. a shared genre pulling in another book's whole neighborhood)
@@ -150,6 +150,39 @@ export default function GraphCanvas({
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy || elements.length === 0) return;
+
+    // Cytoscape gives a node with no explicit position a default of
+    // (0, 0) -- that's every node that just arrived in this batch (a
+    // whole book's neighborhood landing in one state update), so without
+    // spreading them out ourselves they'd start glued to each other (and
+    // often right on top of whatever's already sitting near the origin).
+    // We used to solve that by randomizing *every* node's position on
+    // every layout run, but that also threw away the positions of nodes
+    // that were already laid out -- so an update as small as expanding
+    // one node could re-solve the whole graph from scratch and leave two
+    // previously-separated, disconnected clusters overlapping in a
+    // tangle. Scattering only the nodes that are actually new keeps
+    // everything already on the canvas exactly where it settled, while
+    // still giving cose's repulsion a distinct starting point for each
+    // new arrival to push apart from.
+    const allNodes = cy.nodes();
+    const isUnplaced = (n: cytoscape.NodeSingular) => n.position("x") === 0 && n.position("y") === 0;
+    const newNodes = allNodes.filter(isUnplaced);
+    const existingNodes = allNodes.filter((n) => !isUnplaced(n));
+
+    if (newNodes.length > 0) {
+      const bounds = existingNodes.length > 0 ? existingNodes.boundingBox() : null;
+      const spread = Math.max(bounds ? Math.max(bounds.w, bounds.h) : 0, 600);
+      const centerX = bounds ? (bounds.x1 + bounds.x2) / 2 : 0;
+      const centerY = bounds ? (bounds.y1 + bounds.y2) / 2 : 0;
+      newNodes.forEach((node) => {
+        node.position({
+          x: centerX + (Math.random() - 0.5) * spread,
+          y: centerY + (Math.random() - 0.5) * spread,
+        });
+      });
+    }
+
     cy.layout(layoutOptions(layoutName)).run();
   }, [elements, layoutName]);
 
