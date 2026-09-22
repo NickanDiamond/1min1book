@@ -76,15 +76,20 @@ function ExploreContent() {
     [expandNode],
   );
 
-  // A fresh search is an explicit "show me this" -- clears the canvas,
-  // previews the result, and places it (and its neighborhood) right away.
+  // A search adds the result (and its neighborhood) onto whatever's
+  // already on the canvas rather than replacing it -- so you can look up
+  // a second, third, unrelated book and compare them side by side. If it
+  // shares nothing with what's already there, it just lands as its own
+  // separate, unconnected cluster (GraphCanvas's layout already spreads
+  // disconnected groups apart instead of pulling them together -- see
+  // the gravity/randomize settings there). The sidebar's explicit Reset
+  // button is what clears the canvas now, not a new search.
   const handleSearchSelect = useCallback(
     (node: GraphNode) => {
-      reset();
       void previewNodeById(node.id);
       void expandToDepth(node.id, depth);
     },
-    [reset, previewNodeById, expandToDepth, depth],
+    [previewNodeById, expandToDepth, depth],
   );
 
   useEffect(() => {
