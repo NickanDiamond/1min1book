@@ -102,22 +102,24 @@ function layoutOptions(layoutName: "cose" | "breadthfirst") {
     // cose applies repulsion between every node pair, connected or not --
     // raising these is what actually keeps loosely-connected clusters
     // (e.g. a shared genre pulling in another book's whole neighborhood)
-    // from settling on top of each other. Bumped up further alongside the
-    // label-truncation fix above, since a hub with a dozen-plus neighbors
-    // (a popular genre or topic) still benefits from extra spacing even
-    // with shorter labels.
-    nodeRepulsion: 20000,
-    idealEdgeLength: 140,
+    // from settling on top of each other. A book connected to a popular
+    // genre/author can easily pick up a dozen-plus neighbors at once
+    // (five books sharing "Dystopian Fiction" plus each of their own
+    // authors and topics, all landing on one hub) -- 1.4x spacing turned
+    // out not to be nearly enough for that, so these are pushed a good
+    // deal further: it looks sparser for a small, simple graph, but a
+    // crowded hub is the case that actually needs to stay legible.
+    nodeRepulsion: 45000,
+    idealEdgeLength: 220,
     nodeOverlap: 24,
-    // A hub that several books share at once (a common genre, an author
-    // with multiple books, a handful of overlapping topics) still tends
-    // to converge tightly enough that labels -- which extend well past
-    // the ~30px node itself, especially for a long title -- overlap each
-    // other even though the node centers are reasonably spaced. cose
-    // applies this as a uniform multiplier over the whole solved layout,
-    // so it spreads everything out proportionally without changing the
+    // A hub that several books share at once still tends to converge
+    // tightly enough that labels -- which extend well past the ~30px
+    // node itself, especially for a long title -- overlap each other
+    // even though the node centers are reasonably spaced. cose applies
+    // this as a uniform multiplier over the whole solved layout, so it
+    // spreads everything out proportionally without changing the
     // relative arrangement the physics already settled on.
-    spacingFactor: 1.4,
+    spacingFactor: 2.5,
     // Lower than cose's 0.4 default. Gravity pulls every node toward one
     // shared center regardless of whether it's actually connected to
     // anything else -- at the old value it was dragging separate,
