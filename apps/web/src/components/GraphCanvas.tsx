@@ -24,6 +24,7 @@ const BOOK_MIN_WIDTH = 44;
 const BOOK_MAX_WIDTH = 132;
 const BOOK_CHAR_WIDTH = 6.4; // ~11px sans-serif average glyph advance
 const BOOK_PADDING = 22;
+const CANVAS_BACKGROUND = "#f3f5f9";
 
 function bookNodeWidth(ele: cytoscape.NodeSingular): number {
   const label = String(ele.data("label") ?? "");
@@ -44,8 +45,8 @@ const BASE_STYLESHEET: (cytoscape.StylesheetStyle | cytoscape.StylesheetCSS)[] =
       "font-family": "var(--font-geist-sans), sans-serif",
       "text-valign": "bottom",
       "text-margin-y": 8,
-      "text-outline-width": 3,
-      "text-outline-color": "#fafafa",
+      "text-outline-width": 2,
+      "text-outline-color": CANVAS_BACKGROUND,
       "text-outline-opacity": 1,
       // Long labels wrap onto a second line instead of running into
       // whatever node happens to be nearby -- "anywhere" (rather than the
@@ -61,7 +62,7 @@ const BASE_STYLESHEET: (cytoscape.StylesheetStyle | cytoscape.StylesheetCSS)[] =
       width: 30,
       height: 30,
       "border-width": 2,
-      "border-color": "#ffffff",
+      "border-color": CANVAS_BACKGROUND,
       "background-color": "#a1a1aa",
       shape: "ellipse",
       "overlay-opacity": 0,
@@ -107,10 +108,10 @@ const BASE_STYLESHEET: (cytoscape.StylesheetStyle | cytoscape.StylesheetCSS)[] =
     selector: "edge",
     style: {
       width: "mapData(weight, 0, 1, 1, 6)",
-      "line-color": "#d4d4d8",
+      "line-color": "#aeb9c9",
       "curve-style": "bezier",
       "target-arrow-shape": "none",
-      opacity: 0.6,
+      opacity: 0.55,
       "transition-property": "opacity, line-color, width",
       "transition-duration": 200,
     },
@@ -168,7 +169,7 @@ const MIN_ZOOM = 0.45;
 // easy to reason about, and it only ever moves genuinely new components
 // (see isNewComponent below), never anything already settled.
 const MIN_COMPONENT_GAP = 100;
-const MIN_NODE_GAP = 8;
+const MIN_NODE_GAP = 20;
 
 // Estimated overlap-avoidance was never actually the bug. cose's own
 // force simulation has no idea how big a node's *label* is -- by default
@@ -282,12 +283,13 @@ function estimateNodeFootprint(n: cytoscape.NodeSingular): Box {
   const label = String(n.data("label") ?? "");
   const isBook = n.data("nodeType") === "BOOK";
   const maxWidthPx = isBook ? 110 : 85;
-  const charW = 6.3;
+  // Err on the side of clearance: browser font metrics and wrapping vary.
+  const charW = 7.2;
   const singleLineW = label.length * charW;
   const lines = Math.max(1, Math.ceil(singleLineW / maxWidthPx));
   const labelW = Math.min(singleLineW, maxWidthPx);
-  const labelH = lines * 13;
-  const marginY = 8;
+  const labelH = lines * 15;
+  const marginY = 12;
   const halfW = Math.max(w / 2, labelW / 2);
   return {
     x1: pos.x - halfW,
@@ -507,7 +509,7 @@ export default function GraphCanvas({
   return (
     <CytoscapeComponent
       elements={elements}
-      style={{ width: "100%", height: "100%" }}
+      style={{ width: "100%", height: "100%", backgroundColor: CANVAS_BACKGROUND }}
       stylesheet={stylesheet}
       // "preset" -- do nothing on mount; the effect above runs the real
       // layout immediately after, and stays the single source of truth
