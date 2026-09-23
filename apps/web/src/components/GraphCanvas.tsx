@@ -168,6 +168,7 @@ const MIN_ZOOM = 0.45;
 // easy to reason about, and it only ever moves genuinely new components
 // (see isNewComponent below), never anything already settled.
 const MIN_COMPONENT_GAP = 100;
+const MIN_NODE_GAP = 8;
 
 // Estimated overlap-avoidance was never actually the bug. cose's own
 // force simulation has no idea how big a node's *label* is -- by default
@@ -309,6 +310,53 @@ function componentFootprint(comp: cytoscape.CollectionReturnValue): Box {
   );
 }
 
+// fCoSE's overlap removal can leave labels touching when most of the
+// surrounding nodes are fixed during an incremental update. Resolve the
+// remaining label-inclusive collisions without moving settled nodes.
+function separateNodeFootprints(cy: cytoscape.Core, movableIds: Set<string>) {
+  const nodes = cy.nodes().toArray().sort((a, b) => a.id().localeCompare(b.id()));
+  for (let pass = 0; pass < 120; pass++) {
+    let moved = false;
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i];
+        const b = nodes[j];
+        const moveA = movableIds.has(a.id());
+        const moveB = movableIds.has(b.id());
+        if (!moveA && !moveB) continue;
+
+        const ab = estimateNodeFootprint(a);
+        const bb = estimateNodeFootprint(b);
+        const overlapX = Math.min(ab.x2, bb.x2) - Math.max(ab.x1, bb.x1);
+        const overlapY = Math.min(ab.y2, bb.y2) - Math.max(ab.y1, bb.y1);
+        if (overlapX + MIN_NODE_GAP <= 0 || overlapY + MIN_NODE_GAP <= 0) continue;
+
+        // Resolve along the cheaper axis; use node ids to break ties at
+        // coincident positions so repeated runs remain deterministic.
+        const horizontal = overlapX < overlapY;
+        const distance = (horizontal ? overlapX : overlapY) + MIN_NODE_GAP;
+        const delta = horizontal
+          ? (a.position("x") <= b.position("x") ? 1 : -1)
+          : (a.position("y") <= b.position("y") ? 1 : -1);
+        const shift = (n: cytoscape.NodeSingular, amount: number) => {
+          if (horizontal) n.position("x", n.position("x") + amount);
+          else n.position("y", n.position("y") + amount);
+        };
+        if (moveA && moveB) {
+          shift(a, -delta * distance / 2);
+          shift(b, delta * distance / 2);
+        } else if (moveA) {
+          shift(a, -delta * distance);
+        } else {
+          shift(b, delta * distance);
+        }
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+}
+
 /**
  * Deterministic minimum spacing between disconnected components. Only
  * ever moves a component that contains at least one node from this
@@ -438,6 +486,8 @@ export default function GraphCanvas({
     }));
 
     cy.layout(layoutOptions(layoutName, fixedNodeConstraint)).run();
+
+    separateNodeFootprints(cy, newNodeIds);
 
     // Runs after fCoSE (not as part of it) because it needs the *final*
     // component boxes fCoSE settled on, including wrapped label extents.
